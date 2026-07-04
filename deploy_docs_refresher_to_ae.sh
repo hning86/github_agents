@@ -22,11 +22,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Simply copy .env into the agent folder so load_dotenv() loads it inside Agent Engine
+# Copy .env into the agent folder and ensure mTLS bypass is set for OTel
 if [ -f .env ]; then
   echo "Copying .env to ${TARGET_ENV} for packaging..."
   cp .env "${TARGET_ENV}"
 fi
+echo "GOOGLE_API_USE_MTLS_ENDPOINT=never" >> "${TARGET_ENV}"
 
 echo "============================================================"
 echo "  Deploying docs_refresher to GCP Vertex AI Agent Engine"
