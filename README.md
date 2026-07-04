@@ -109,7 +109,7 @@ Copy the forwarding URL (`https://xxxx.localhost.run`) and paste it into your Gi
 ## ☁️ Deployment to GCP (Vertex AI Agent Engine & Cloud Run)
 
 ### 1. Deploy Reasoning Engines to Vertex AI Agent Engine (with OpenTelemetry)
-Deploy the autonomous agents to Vertex AI Agent Engine using the provided scripts. These scripts automatically pass `--otel_to_cloud` to enable native OpenTelemetry observability, exporting spans, traces, and metrics directly to GCP Cloud Trace and Cloud Logging:
+Deploy the autonomous agents to Vertex AI Agent Engine using the provided scripts:
 ```bash
 # Deploy PR Reviewer (with OpenTelemetry enabled)
 ./deploy_pr_reviewer_to_ae.sh
@@ -117,6 +117,8 @@ Deploy the autonomous agents to Vertex AI Agent Engine using the provided script
 # Deploy Docs Refresher (with OpenTelemetry enabled)
 ./deploy_docs_refresher_to_ae.sh
 ```
+These scripts automatically pass `--otel_to_cloud` to enable native OpenTelemetry observability (exporting spans, traces, and metrics directly to GCP Cloud Trace and Cloud Logging) and inject `GOOGLE_API_USE_MTLS_ENDPOINT=never` into the container environment to ensure trace exporters authenticate reliably over standard OAuth2 REST endpoints without mTLS certificate verification failures.
+
 After deploying, copy the returned `Agent Engine ID` values into your `.env` file as `PR_REVIEWER_ENGINE_ID` and `DOCS_REFRESHER_ENGINE_ID`.
 
 ### 2. Deploy Webhook Service to Cloud Run
