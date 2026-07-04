@@ -403,6 +403,14 @@
             if (e.data === 'heartbeat') return;
             try {
                 const evt = JSON.parse(e.data);
+                if (evt.event_type === 'CLEAR') {
+                    consoleFeed.innerHTML = '';
+                    activityFeed.innerHTML = '<div class="empty-state" id="emptyActivity">Waiting for GitHub pull_request webhooks...</div>';
+                    workflows.clear();
+                    workflowCount.textContent = '0 Executions';
+                    renderLogEntry(evt);
+                    return;
+                }
                 renderLogEntry(evt);
                 updateWorkflows(evt);
             } catch (err) {
@@ -507,8 +515,13 @@
             });
         }
 
-        function clearConsole() {
+        async function clearConsole() {
             consoleFeed.innerHTML = '';
+            try {
+                await fetch('/api/clear', { method: 'POST' });
+            } catch (e) {
+                console.error('Failed to clear server event history:', e);
+            }
         }
     </script>
 </body>

@@ -13,7 +13,7 @@ load_dotenv()
 from fastapi import FastAPI, Request, HTTPException, Header, BackgroundTasks
 from fastapi.responses import HTMLResponse, StreamingResponse
 
-from .broadcaster import broadcast_event, sse_event_generator
+from .broadcaster import broadcast_event, sse_event_generator, clear_history
 from .engine_client import get_remote_engine, query_remote_agent
 
 # Configure logging
@@ -104,6 +104,12 @@ async def run_agent_docs_refresher(source_repo: str, pr_number: int, pr_title: s
 async def stream_events(request: Request):
     """Server-Sent Events (SSE) stream for real-time dashboard updates."""
     return StreamingResponse(sse_event_generator(request.is_disconnected), media_type="text/event-stream")
+
+@app.post("/api/clear")
+async def clear_logs():
+    """Clear the server-side event history ring buffer."""
+    clear_history()
+    return {"status": "cleared"}
 
 @app.get("/health")
 async def health_check():

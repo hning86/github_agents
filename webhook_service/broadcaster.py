@@ -41,6 +41,23 @@ def broadcast_event(level: str, event_type: str, agent: str, message: str, pr_in
         except asyncio.QueueFull:
             pass
 
+def clear_history() -> None:
+    """Clear the server-side event history ring buffer and broadcast clear command."""
+    _event_history.clear()
+    evt = {
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "level": "INFO",
+        "event_type": "CLEAR",
+        "agent": "Dashboard",
+        "message": "🧹 Server event history cleared.",
+        "pr_info": {}
+    }
+    for queue in list(_event_listeners):
+        try:
+            queue.put_nowait(evt)
+        except asyncio.QueueFull:
+            pass
+
 async def sse_event_generator(request_disconnect_checker):
     """Generator yielding formatted Server-Sent Events for connected clients."""
     # Send existing history first
