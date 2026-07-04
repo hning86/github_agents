@@ -124,7 +124,7 @@ To deploy this service as a scalable, serverless event handler on Google Cloud R
 
 2. **Deploy using the automated deployment script** (from the repository root directory):
    ```bash
-   ./deploy_webhook_to_cr.sh
+   sh deployment/deploy_webhook_to_cr.sh
    ```
    *This script automatically copies `webhook_service/Dockerfile` to `./Dockerfile` for Cloud Build packaging, deploys `github-webhook-service` to Cloud Run, and passes all required environment variables into the container runtime.*
 

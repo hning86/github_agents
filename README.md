@@ -138,10 +138,10 @@ uv run python -m webhook_service.main
 Deploy the autonomous agents to Vertex AI Agent Engine using the provided scripts:
 ```bash
 # Deploy PR Reviewer (with OpenTelemetry enabled)
-./deploy_pr_reviewer_to_ae.sh
+sh deployment/deploy_pr_reviewer_to_ae.sh
 
 # Deploy Docs Refresher (with OpenTelemetry enabled)
-./deploy_docs_refresher_to_ae.sh
+sh deployment/deploy_docs_refresher_to_ae.sh
 ```
 These scripts automatically pass `--otel_to_cloud` to enable native OpenTelemetry observability (exporting spans, traces, and metrics directly to GCP Cloud Trace and Cloud Logging) and inject `GOOGLE_API_USE_MTLS_ENDPOINT=never` into the container environment to ensure trace exporters authenticate reliably over standard OAuth2 REST endpoints without mTLS certificate verification failures.
 
@@ -150,6 +150,6 @@ After deploying, copy the returned `Agent Engine ID` values into your `.env` fil
 ### 2. Deploy Webhook Service to Cloud Run
 Deploy the lightweight FastAPI event handler to Cloud Run using the automated deployment script:
 ```bash
-./deploy_webhook_to_cr.sh
+sh deployment/deploy_webhook_to_cr.sh
 ```
 Once deployed, update your GitHub Webhook configuration with the assigned Cloud Run HTTPS URL (e.g., `https://github-webhook-service-xyz-uc.a.run.app/webhook/github`).

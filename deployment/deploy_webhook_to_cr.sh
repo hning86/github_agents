@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
+# Resolve repository root directory (one level up from script directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${REPO_ROOT}"
+
 # Load environment variables from .env if present
 if [ -f .env ]; then
   echo "Loading environment variables from .env..."
