@@ -1,23 +1,20 @@
 import os
+import json
 import hmac
 import hashlib
+import asyncio
 import logging
 from typing import Optional
 from dotenv import load_dotenv
 
-# Load environment variables from .env before importing agent or starting service
+# Load environment variables from .env before starting service
 load_dotenv()
 
+import vertexai
+from vertexai.preview import reasoning_engines
+from google.cloud.aiplatform_v1beta1.types import reasoning_engine_execution_service as aip_types
+
 from fastapi import FastAPI, Request, HTTPException, Header, BackgroundTasks
-from google.adk.runners import InMemoryRunner
-from google.genai import types
-from pr_reviewer import root_agent as pr_reviewer_agent
-from docs_refresher import root_agent as docs_refresher_agent
-
-
-
-
-
 
 # Configure logging
 logging.basicConfig(
@@ -28,7 +25,7 @@ logger = logging.getLogger("webhook_service")
 
 app = FastAPI(
     title="ADK GitHub PR Reviewer Webhook Service",
-    description="Listens for GitHub pull_request webhooks and invokes the ADK GitHub Agent to conduct automated code reviews."
+    description="Listens for GitHub pull_request webhooks and invokes the ADK GitHub Agent on GCP Agent Engine to conduct automated code reviews."
 )
 
 def verify_signature(payload: bytes, signature: Optional[str], secret: str) -> bool:
@@ -45,14 +42,69 @@ def verify_signature(payload: bytes, signature: Optional[str], secret: str) -> b
     expected = "sha256=" + mac.hexdigest()
     return hmac.compare_digest(expected, signature)
 
+# Cache for remote reasoning engines
+_remote_engines_cache = {}
+
+def get_remote_engine(display_name: str, env_var_name: Optional[str] = None) -> Optional[reasoning_engines.ReasoningEngine]:
+    """Discover and return a ReasoningEngine instance by display_name or env var ID, caching the result."""
+    if display_name in _remote_engines_cache:
+        return _remote_engines_cache[display_name]
+        
+    project_id = os.getenv("GCP_PROJECT_ID", "ninghai-ccai")
+    region = os.getenv("GCP_REGION", "us-central1")
+    vertexai.init(project=project_id, location=region)
+    
+    # 1. Check if explicit engine ID/name is provided via env var (e.g. PR_REVIEWER_ENGINE_ID)
+    if env_var_name and os.getenv(env_var_name):
+        eng_id = os.getenv(env_var_name).strip()
+        resource_name = eng_id if "projects/" in eng_id else f"projects/{project_id}/locations/{region}/reasoningEngines/{eng_id}"
+        logger.info(f"Connecting to remote engine '{display_name}' via {env_var_name}: {resource_name}")
+        eng = reasoning_engines.ReasoningEngine(resource_name)
+        _remote_engines_cache[display_name] = eng
+        return eng
+        
+    # 2. Otherwise list reasoning engines in registry and match by display_name
+    logger.info(f"Searching GCP Agent Registry ({project_id}/{region}) for '{display_name}'...")
+    all_engines = reasoning_engines.ReasoningEngine.list()
+    for summary_eng in all_engines:
+        if summary_eng.display_name == display_name:
+            eng = reasoning_engines.ReasoningEngine(summary_eng.resource_name)
+            _remote_engines_cache[display_name] = eng
+            logger.info(f"Found remote engine '{display_name}' at {eng.resource_name}")
+            return eng
+            
+    logger.error(f"Reasoning engine '{display_name}' not found in GCP Agent Registry.")
+    return None
+
+def query_remote_agent(engine: reasoning_engines.ReasoningEngine, message: str, user_id: str = "github_webhook_service") -> str:
+    """Helper to query an ADK agent on Agent Engine via stream_query."""
+    logger.info(f"Querying remote Agent Engine ({engine.resource_name}) for user '{user_id}'...")
+    resp = engine.execution_api_client.stream_query_reasoning_engine(
+        request=aip_types.StreamQueryReasoningEngineRequest(
+            name=engine.resource_name,
+            input={"message": message, "user_id": user_id},
+            class_method="async_stream_query"
+        )
+    )
+    
+    full_text = []
+    for chunk in resp:
+        if hasattr(chunk, "data") and chunk.data:
+            try:
+                data = json.loads(chunk.data)
+                parts = data.get("content", {}).get("parts", [])
+                for part in parts:
+                    if "function_call" in part:
+                        logger.info(f"⚙️ Remote Agent executing tool: {part['function_call'].get('name')}")
+                    if "text" in part:
+                        full_text.append(part["text"])
+            except json.JSONDecodeError:
+                pass
+    return "".join(full_text)
+
 async def run_agent_pr_review(repo_full_name: str, pr_number: int, pr_title: str):
-    """Run the ADK agent autonomously in the background to review and comment on the PR."""
-    logger.info(f"🚀 Starting background agent review for {repo_full_name} PR #{pr_number}: '{pr_title}'")
-    runner = InMemoryRunner(agent=pr_reviewer_agent)
-    runner.auto_create_session = True
-
-
-
+    """Run the ADK agent autonomously in the background on Agent Engine to review and comment on the PR."""
+    logger.info(f"🚀 Starting background Agent Engine review for {repo_full_name} PR #{pr_number}: '{pr_title}'")
     
     prompt = (
         f"A new Pull Request #{pr_number} ('{pr_title}') was just created in repository '{repo_full_name}'.\n"
@@ -63,29 +115,23 @@ async def run_agent_pr_review(repo_full_name: str, pr_number: int, pr_title: str
         f"IMPORTANT: Make sure you actually execute the tool(s) to post your review and comments on the Pull Request before ending!"
     )
 
-    user_message = types.Content(role="user", parts=[types.Part(text=prompt)])
-    
     try:
-        async for event in runner.run_async(
-            user_id="github_webhook_service",
-            session_id=f"pr_review_{repo_full_name.replace('/', '_')}_{pr_number}",
-            new_message=user_message
-        ):
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.function_call:
-                        logger.info(f"⚙️ Agent executing tool: {part.function_call.name}")
-        logger.info(f"✅ Successfully completed review for {repo_full_name} PR #{pr_number}")
+        eng = await asyncio.to_thread(get_remote_engine, "ADK GitHub PR Reviewer", "PR_REVIEWER_ENGINE_ID")
+        if not eng:
+            logger.error(f"❌ Could not find remote Agent Engine for ADK GitHub PR Reviewer")
+            return
+            
+        user_id = f"github_webhook_service_{repo_full_name.replace('/', '_')}_{pr_number}"
+        answer = await asyncio.to_thread(query_remote_agent, eng, prompt, user_id)
+        logger.info(f"🤖 Agent Engine Response for PR #{pr_number}:\n{answer}")
+        logger.info(f"✅ Successfully completed Agent Engine review for {repo_full_name} PR #{pr_number}")
     except Exception as e:
-        logger.error(f"❌ Error during agent review of PR #{pr_number}: {e}", exc_info=True)
+        logger.error(f"❌ Error during Agent Engine review of PR #{pr_number}: {e}", exc_info=True)
 
 
 async def run_agent_docs_refresher(source_repo: str, pr_number: int, pr_title: str, target_docs_repo: str):
-    """Run docs_refresher agent in background to update documentation across all relevant files based on a merged PR."""
-    logger.info(f"🚀 Starting docs_refresher for merged PR #{pr_number} ('{pr_title}') -> Target Docs Repo: {target_docs_repo}")
-    
-    runner = InMemoryRunner(agent=docs_refresher_agent)
-    runner.auto_create_session = True
+    """Run docs_refresher agent in background on Agent Engine to update documentation across all relevant files based on a merged PR."""
+    logger.info(f"🚀 Starting background Agent Engine docs_refresher for merged PR #{pr_number} ('{pr_title}') -> Target Docs Repo: {target_docs_repo}")
     
     prompt = (
         f"Pull Request #{pr_number} ('{pr_title}') was just MERGED in repository '{source_repo}'.\n"
@@ -96,21 +142,18 @@ async def run_agent_docs_refresher(source_repo: str, pr_number: int, pr_title: s
         f"If no updates are needed across any documentation files, summarize your findings."
     )
     
-    user_message = types.Content(role="user", parts=[types.Part(text=prompt)])
-    
     try:
-        async for event in runner.run_async(
-            user_id="github_webhook_service",
-            session_id=f"docs_refresh_{source_repo.replace('/', '_')}_{pr_number}",
-            new_message=user_message
-        ):
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.function_call:
-                        logger.info(f"⚙️ Docs Refresher executing tool: {part.function_call.name}")
-        logger.info(f"✅ Successfully completed docs refresh for merged PR #{pr_number}")
+        eng = await asyncio.to_thread(get_remote_engine, "ADK GitHub Docs Refresher", "DOCS_REFRESHER_ENGINE_ID")
+        if not eng:
+            logger.error(f"❌ Could not find remote Agent Engine for ADK GitHub Docs Refresher")
+            return
+            
+        user_id = f"github_webhook_service_docs_{source_repo.replace('/', '_')}_{pr_number}"
+        answer = await asyncio.to_thread(query_remote_agent, eng, prompt, user_id)
+        logger.info(f"🤖 Agent Engine Response for Docs Refresh PR #{pr_number}:\n{answer}")
+        logger.info(f"✅ Successfully completed Agent Engine docs refresh for merged PR #{pr_number}")
     except Exception as e:
-        logger.error(f"❌ Error during docs refresh for PR #{pr_number}: {e}", exc_info=True)
+        logger.error(f"❌ Error during Agent Engine docs refresh for PR #{pr_number}: {e}", exc_info=True)
 
 
 @app.get("/")

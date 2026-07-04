@@ -4,21 +4,40 @@ An intelligent, multi-agent AI system built on the **Google Agent Development Ki
 
 ---
 
-## 🏗️ Architecture & Agents
+## 🏗️ System Architecture & End-to-End Workflow
 
-The project is structured into modular components:
+The system decouples event handling from heavy LLM agent execution by leveraging **GCP Cloud Run** for instantaneous webhook processing and **GCP Vertex AI Agent Engine** for autonomous reasoning and MCP tool execution.
 
-1. **`pr_reviewer` (Pull Request Review Agent)**
-   - Conducts automated, constructive code reviews when Pull Requests are opened or updated.
-   - Leverages GitHub MCP tools (`get_pull_request_files`, `pull_request_review_write`, `add_comment_to_pending_review`) to post overall review summaries as well as **specific inline line comments** on exact file diffs when warranted.
-2. **`docs_refresher` (Documentation Synchronization Agent)**
-   - Triggered automatically when a Pull Request is closed and merged.
-   - Searches across target documentation repositories (configured via `DOCS_TARGET_REPO`) to discover any relevant markdown (`.md`) documentation affected by code changes.
-   - Autonomously creates a new branch, updates or adds all necessary documentation files, and opens a summary Pull Request in the docs repository.
-3. **`webhook_service` (FastAPI Cloud Run Service)**
-   - Production-ready event receiver that listens for GitHub `pull_request` webhooks.
-   - Enforces HMAC SHA-256 webhook signature verification (`GITHUB_WEBHOOK_SECRET`) and repository whitelisting (`ALLOWED_CODE_REPOS`).
-   - Processes agent workflows asynchronously in background task queues so incoming webhook deliveries return `202 Accepted` immediately without timing out.
+```mermaid
+flowchart TD
+    GH["GitHub Webhook (PR Event)"] -->|POST /webhook/github| CR["Cloud Run (FastAPI Webhook Service)"]
+    
+    subgraph CR_Service ["GCP Cloud Run Runtime"]
+        CR -->|"1. Verify HMAC Signature"| Auth["Signature Verification"]
+        Auth -->|"2. Check Repo Allowlist"| Dispatch["Async Background Task Queue"]
+    end
+
+    subgraph AE ["GCP Vertex AI Agent Engine"]
+        Dispatch -->|"3a. PR Opened / Updated (stream_query)"| PR_Agent["ADK GitHub PR Reviewer"]
+        Dispatch -->|"3b. PR Merged (stream_query)"| Docs_Agent["ADK GitHub Docs Refresher"]
+    end
+
+    subgraph MCP ["Model Context Protocol over SSE"]
+        PR_Agent <-->|"4. Remote Tool Calls"| MCP_Server["Remote GitHub MCP Server"]
+        Docs_Agent <-->|"4. Remote Tool Calls"| MCP_Server
+    end
+
+    MCP_Server -->|"5a. Post Inline Reviews & Comments"| Source_Repo["Source Code Repository"]
+    MCP_Server -->|"5b. Branch & Open PR with Updated Docs"| Docs_Repo["Target Documentation Repository"]
+```
+
+### Detailed Workflow Details
+1. **Instantaneous Event Ingestion**: When a developer opens, updates, or merges a Pull Request on GitHub, GitHub posts an event payload (`pull_request`) to the webhook service hosted on **GCP Cloud Run**.
+2. **Security & Validation**: The Cloud Run service verifies the request integrity using HMAC SHA-256 signatures (`GITHUB_WEBHOOK_SECRET`) and checks if the source repository is authorized (`ALLOWED_CODE_REPOS`).
+3. **Asynchronous Dispatch**: To comply with GitHub's strict 10-second webhook timeout, Cloud Run immediately returns `202 Accepted` to GitHub and queues a non-blocking asyncio background task (`asyncio.to_thread`) to stream the prompt to the remote reasoning engine.
+4. **Autonomous Reasoning on Agent Engine**:
+   - **On PR Open / Push (`opened` / `synchronize`)**: Queries the deployed `ADK GitHub PR Reviewer` instance on Vertex AI Agent Engine. The agent connects to the remote GitHub MCP server (`api.githubcopilot.com/mcp/sse`), analyzes line diffs, and submits line-by-line inline review comments directly onto the Pull Request.
+   - **On PR Merge (`closed` + `merged`)**: Queries the deployed `ADK GitHub Docs Refresher` instance on Vertex AI Agent Engine. The agent inspects the merged diffs, explores existing `.md` files in the target repository (`DOCS_TARGET_REPO`), creates a new branch, commits necessary documentation updates, and opens a documentation pull request.
 
 ---
 
@@ -87,17 +106,22 @@ Copy the forwarding URL (`https://xxxx.localhost.run`) and paste it into your Gi
 
 ---
 
-## ☁️ Deployment to Google Cloud Run
+## ☁️ Deployment to GCP (Vertex AI Agent Engine & Cloud Run)
 
-Deploy the multi-agent service directly to Google Cloud Run as a scalable container:
-
+### 1. Deploy Reasoning Engines to Vertex AI Agent Engine
+Deploy the autonomous agents to Vertex AI Agent Engine using the provided scripts:
 ```bash
-gcloud run deploy github-pr-reviewer \
-  --source . \
-  --project your-gcp-project-id \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars="GCP_PROJECT_ID=your-gcp-project-id,GCP_REGION=us-central1,GOOGLE_GENAI_USE_VERTEXAI=1,GITHUB_WEBHOOK_SECRET=your_webhook_secret,ALLOWED_CODE_REPOS=owner/repo,DOCS_TARGET_REPO=owner/repo-docs" \
-  --set-secrets="GITHUB_PERSONAL_ACCESS_TOKEN=GITHUB_PAT_SECRET:latest"
+# Deploy PR Reviewer
+./deploy_pr_reviewer_to_ae.sh
+
+# Deploy Docs Refresher
+./deploy_docs_refresher_to_ae.sh
 ```
-Once deployed, update your GitHub Webhook configuration with the assigned Cloud Run HTTPS URL (e.g., `https://github-pr-reviewer-xyz-uc.a.run.app/webhook/github`).
+After deploying, copy the returned `Agent Engine ID` values into your `.env` file as `PR_REVIEWER_ENGINE_ID` and `DOCS_REFRESHER_ENGINE_ID`.
+
+### 2. Deploy Webhook Service to Cloud Run
+Deploy the lightweight FastAPI event handler to Cloud Run using the automated deployment script:
+```bash
+./deploy_webhook_to_cr.sh
+```
+Once deployed, update your GitHub Webhook configuration with the assigned Cloud Run HTTPS URL (e.g., `https://github-webhook-service-xyz-uc.a.run.app/webhook/github`).

@@ -42,4 +42,6 @@ env/
 *.log
 sqlite.db
 .adk/
+.agent_engine_config.json
+
 

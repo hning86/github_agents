@@ -45,7 +45,7 @@ mcp_toolset = McpToolset(
 
 # Define the GitHub Helper Agent
 pr_reviewer = Agent(
-    model="gemini-3.5-flash",
+    model="gemini-2.5-pro",
     name="pr_reviewer",
     description="Agent with access to the remote GitHub-hosted MCP tools to review Pull Requests.",
     instruction="""You are an expert GitHub assistant. 

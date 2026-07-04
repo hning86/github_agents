@@ -38,7 +38,7 @@ mcp_toolset = McpToolset(
 
 # Define the Docs Refresher Agent
 docs_refresher = Agent(
-    model="gemini-3.5-flash",
+    model="gemini-2.5-pro",
     name="docs_refresher",
     description="Agent that updates all relevant markdown documentation (.md files) in a target repository based on merged Pull Requests.",
     instruction="""You are an expert technical documentation assistant specializing in keeping all relevant markdown documentation (.md files) synchronized across repositories when code changes occur.
