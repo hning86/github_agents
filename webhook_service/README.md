@@ -1,6 +1,13 @@
 # ADK GitHub PR Reviewer Webhook Service
 
-A lightweight FastAPI service designed to listen for GitHub webhooks (`pull_request` events) and autonomously invoke the **ADK GitHub Agent** (Gemini 2.5 Flash + remote GitHub MCP server) to perform code reviews and post comments on Pull Requests.
+A production-ready FastAPI service designed to listen for GitHub webhooks (`pull_request` events), surface a **Stunning Live Streaming Web UI** (`GET /`), and autonomously invoke remote ADK agents on GCP Vertex AI Agent Engine to perform automated code reviews and documentation refreshes.
+
+---
+
+## ⚡ Features
+- **Live Observability Dashboard**: Serve a rich glassmorphism Web UI directly at root (`GET /`) over Server-Sent Events (`/api/stream`) to broadcast real-time reasoning chunks, tool executions, and PR activity cards during live demos.
+- **Asynchronous Non-Blocking Execution**: Instantaneous `202 Accepted` webhook returns via `asyncio.to_thread` workers.
+- **Enterprise Security**: HMAC SHA-256 webhook signature verification (`GITHUB_WEBHOOK_SECRET`) and repository allowlists (`ALLOWED_CODE_REPOS`).
 
 ---
 
@@ -9,7 +16,7 @@ A lightweight FastAPI service designed to listen for GitHub webhooks (`pull_requ
 ```
 webhook_service/
 ├── __init__.py
-├── main.py        # FastAPI webhook server & agent background task runner
+├── main.py        # FastAPI webhook server, SSE live dashboard & background task runner
 ├── Dockerfile     # Cloud Run multi-stage Dockerfile
 └── README.md      # Deployment & running instructions
 ```

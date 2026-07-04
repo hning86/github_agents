@@ -118,16 +118,17 @@ Run ad-hoc queries from the terminal against `pr_reviewer`:
 uv run run_agent.py "Show the last commit in owner/repo"
 ```
 
-### 3. Live Webhook Server (Local Tunneling)
-Start the local FastAPI server to process incoming GitHub webhooks:
+### 3. Live Webhook Server & Observability Dashboard
+Start the local FastAPI server to process incoming GitHub webhooks and serve the built-in real-time web dashboard:
 ```bash
 uv run python -m webhook_service.main
 ```
-Expose local port `8080` instantly to GitHub without any account signups via SSH tunneling:
-```bash
-ssh -R 80:localhost:8080 nokey@localhost.run
-```
-Copy the forwarding URL (`https://xxxx.localhost.run`) and paste it into your GitHub repository settings under **Settings** → **Webhooks** → **Add webhook** (Payload URL: `https://xxxx.localhost.run/webhook/github`).
+- **Live Web UI Dashboard**: Open `http://localhost:8080/` in any browser to watch real-time SSE streaming logs, active PR workflow cards, and remote GitHub MCP tool executions during demos.
+- **Local GitHub Tunneling**: Expose local port `8080` instantly to GitHub via SSH tunneling:
+  ```bash
+  ssh -R 80:localhost:8080 nokey@localhost.run
+  ```
+  Copy the forwarding URL (`https://xxxx.localhost.run`) and paste it into your GitHub repository settings under **Settings** → **Webhooks** → **Add webhook** (Payload URL: `https://xxxx.localhost.run/webhook/github`).
 
 ---
 
