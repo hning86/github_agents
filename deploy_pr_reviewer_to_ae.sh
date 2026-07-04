@@ -42,7 +42,8 @@ uv run adk deploy agent_engine pr_reviewer \
   --region="${REGION}" \
   --display_name="${DISPLAY_NAME}" \
   --agent_engine_id="${AGENT_ENGINE_ID}" \
-  --description="${DESCRIPTION}"
+  --description="${DESCRIPTION}" \
+  --otel_to_cloud
 
 
 
