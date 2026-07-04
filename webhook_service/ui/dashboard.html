@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADK Autonomous Agent Live Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #080c14;
+            --bg-secondary: #0e1626;
+            --bg-card: rgba(18, 28, 48, 0.65);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-pink: #ec4899;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.12) 0px, transparent 50%);
+        }
+
+        /* Top Navigation Header */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: rgba(14, 22, 38, 0.8);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        }
+
+        .brand-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.9rem;
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--accent-green);
+            box-shadow: 0 0 10px var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        /* Main Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.6fr;
+            gap: 1.5rem;
+            padding: 1.5rem 2rem;
+            flex: 1;
+            max-height: calc(100vh - 70px);
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                max-height: none;
+            }
+        }
+
+        /* Pane Layout */
+        .pane {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .pane-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .pane-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Activity Cards Section */
+        .activity-feed {
+            padding: 1.25rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            flex: 1;
+        }
+
+        .activity-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            transition: all 0.25s ease;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .activity-card:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .badge {
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-pr { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); border: 1px solid rgba(59, 130, 246, 0.3); }
+        .badge-docs { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); border: 1px solid rgba(139, 92, 246, 0.3); }
+        .badge-webhook { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.35rem;
+            line-height: 1.4;
+        }
+
+        .card-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 1rem;
+        }
+
+        .tool-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.55rem;
+            border-radius: 4px;
+            background: rgba(6, 182, 212, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(6, 182, 212, 0.25);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            margin-top: 0.75rem;
+            margin-right: 0.4rem;
+        }
+
+        /* Live Terminal Log Section */
+        .terminal-controls {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 0.3rem 0.7rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-btn.active, .filter-btn:hover {
+            background: rgba(59, 130, 246, 0.2);
+            color: #fff;
+            border-color: var(--accent-blue);
+        }
+
+        .terminal-console {
+            background: rgba(5, 8, 15, 0.85);
+            padding: 1.25rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 0.75rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: 6px;
+            border-left: 3px solid transparent;
+            transition: background 0.15s;
+        }
+
+        .log-entry:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .log-timestamp {
+            color: #64748b;
+            flex-shrink: 0;
+        }
+
+        .log-agent {
+            font-weight: 600;
+            flex-shrink: 0;
+            width: 125px;
+        }
+
+        .agent-webhook { color: var(--accent-amber); }
+        .agent-pr { color: var(--accent-blue); }
+        .agent-docs { color: var(--accent-purple); }
+        .agent-vertex { color: var(--accent-cyan); }
+
+        .log-msg {
+            color: var(--text-main);
+            word-break: break-word;
+        }
+
+        .log-entry.INFO { border-left-color: rgba(255, 255, 255, 0.2); }
+        .log-entry.TOOL_CALL { border-left-color: var(--accent-cyan); background: rgba(6, 182, 212, 0.05); }
+        .log-entry.SUCCESS { border-left-color: var(--accent-green); background: rgba(16, 185, 129, 0.05); }
+        .log-entry.ERROR { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.08); color: #fca5a5; }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <header class="navbar">
+        <div class="brand">
+            <div class="logo-icon">AI</div>
+            <span class="brand-title">ADK Multi-Agent Execution Dashboard</span>
+        </div>
+        <div class="connection-status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Connected to Cloud Run SSE Stream</span>
+        </div>
+    </header>
+
+    <main class="dashboard-grid">
+        <!-- Left Pane: Activity & PR Cards -->
+        <section class="pane">
+            <div class="pane-header">
+                <div class="pane-title">🚀 Active Agent Workflows</div>
+                <span class="badge badge-pr" id="workflowCount">0 Executions</span>
+            </div>
+            <div class="activity-feed" id="activityFeed">
+                <div class="empty-state" id="emptyActivity">Waiting for GitHub pull_request webhooks...</div>
+            </div>
+        </section>
+
+        <!-- Right Pane: Live Console Stream -->
+        <section class="pane">
+            <div class="pane-header">
+                <div class="pane-title">⚡ Live Vertex AI Agent Engine Console</div>
+                <div class="terminal-controls">
+                    <button class="filter-btn active" onclick="filterLogs('ALL', this)">ALL</button>
+                    <button class="filter-btn" onclick="filterLogs('PR Reviewer', this)">PR REVIEWER</button>
+                    <button class="filter-btn" onclick="filterLogs('Docs Refresher', this)">DOCS REFRESHER</button>
+                    <button class="filter-btn" onclick="filterLogs('TOOL_CALL', this)">TOOLS</button>
+                    <button class="filter-btn" onclick="clearConsole()">CLEAR</button>
+                </div>
+            </div>
+            <div class="terminal-console" id="consoleFeed">
+                <div class="log-entry INFO">
+                    <span class="log-timestamp">SYSTEM</span>
+                    <span class="log-agent agent-vertex">Dashboard</span>
+                    <span class="log-msg">Subscribing to real-time event stream from Cloud Run...</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const activityFeed = document.getElementById('activityFeed');
+        const emptyActivity = document.getElementById('emptyActivity');
+        const consoleFeed = document.getElementById('consoleFeed');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const workflowCount = document.getElementById('workflowCount');
+
+        let activeFilter = 'ALL';
+        const workflows = new Map();
+
+        // Connect Server-Sent Events
+        const evtSource = new EventSource('/api/stream');
+
+        evtSource.onopen = () => {
+            statusDot.style.backgroundColor = '#10b981';
+            statusDot.style.boxShadow = '0 0 10px #10b981';
+            statusText.textContent = 'Connected to Cloud Run SSE Stream';
+        };
+
+        evtSource.onerror = () => {
+            statusDot.style.backgroundColor = '#ef4444';
+            statusDot.style.boxShadow = '0 0 10px #ef4444';
+            statusText.textContent = 'Reconnecting to Event Stream...';
+        };
+
+        evtSource.onmessage = (e) => {
+            if (e.data === 'heartbeat') return;
+            try {
+                const evt = JSON.parse(e.data);
+                renderLogEntry(evt);
+                updateWorkflows(evt);
+            } catch (err) {
+                console.error("Error parsing event:", err);
+            }
+        };
+
+        function renderLogEntry(evt) {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${evt.event_type === 'TOOL_CALL' ? 'TOOL_CALL' : evt.level}`;
+            entry.dataset.agent = evt.agent;
+            entry.dataset.type = evt.event_type;
+
+            if (activeFilter !== 'ALL') {
+                if (activeFilter === 'TOOL_CALL' && evt.event_type !== 'TOOL_CALL') entry.style.display = 'none';
+                else if (activeFilter !== 'TOOL_CALL' && evt.agent !== activeFilter) entry.style.display = 'none';
+            }
+
+            const timeStr = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : 'NOW';
+            let agentClass = 'agent-webhook';
+            if (evt.agent === 'PR Reviewer') agentClass = 'agent-pr';
+            else if (evt.agent === 'Docs Refresher') agentClass = 'agent-docs';
+            else if (evt.agent === 'Vertex AI') agentClass = 'agent-vertex';
+
+            entry.innerHTML = `
+                <span class="log-timestamp">[${timeStr}]</span>
+                <span class="log-agent ${agentClass}">${evt.agent}</span>
+                <span class="log-msg">${evt.message}</span>
+            `;
+
+            consoleFeed.appendChild(entry);
+            consoleFeed.scrollTop = consoleFeed.scrollHeight;
+        }
+
+        function updateWorkflows(evt) {
+            if (!evt.pr_info || (!evt.pr_info.pr && !evt.pr_info.repo)) return;
+            const prKey = `${evt.pr_info.repo}#${evt.pr_info.pr}`;
+            
+            if (emptyActivity) emptyActivity.style.display = 'none';
+
+            let card = document.getElementById(`wf-${prKey}`);
+            if (!card) {
+                card = document.createElement('div');
+                card.id = `wf-${prKey}`;
+                card.className = 'activity-card';
+                
+                const badgeType = evt.pr_info.type === 'Docs Refresh' ? 'badge-docs' : 'badge-pr';
+                
+                card.innerHTML = `
+                    <div class="card-top">
+                        <span class="badge ${badgeType}">${evt.pr_info.type || evt.agent}</span>
+                        <span class="badge" id="status-${prKey}" style="background:rgba(255,255,255,0.05)">IN PROGRESS</span>
+                    </div>
+                    <div class="card-title">${evt.pr_info.title || `Pull Request #${evt.pr_info.pr}`}</div>
+                    <div class="card-meta">
+                        <span>📦 ${evt.pr_info.repo}</span>
+                        <span>PR #${evt.pr_info.pr}</span>
+                    </div>
+                    <div id="tools-${prKey}" style="display:flex; flex-wrap:wrap;"></div>
+                `;
+                activityFeed.prepend(card);
+                workflows.set(prKey, true);
+                workflowCount.textContent = `${workflows.size} Executions`;
+            }
+
+            // Add tool badge if tool call
+            if (evt.event_type === 'TOOL_CALL' && evt.pr_info.tool) {
+                const toolsContainer = document.getElementById(`tools-${prKey}`);
+                const chip = document.createElement('span');
+                chip.className = 'tool-chip';
+                chip.innerHTML = `⚡ ${evt.pr_info.tool}`;
+                toolsContainer.appendChild(chip);
+            }
+
+            // Update status on completion
+            if (evt.level === 'SUCCESS') {
+                const statusBadge = document.getElementById(`status-${prKey}`);
+                if (statusBadge) {
+                    statusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+                    statusBadge.style.color = '#10b981';
+                    statusBadge.textContent = 'COMPLETE';
+                }
+            } else if (evt.level === 'ERROR') {
+                const statusBadge = document.getElementById(`status-${prKey}`);
+                if (statusBadge) {
+                    statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+                    statusBadge.style.color = '#ef4444';
+                    statusBadge.textContent = 'ERROR';
+                }
+            }
+        }
+
+        function filterLogs(filter, btn) {
+            activeFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            document.querySelectorAll('.log-entry').forEach(entry => {
+                if (filter === 'ALL') entry.style.display = 'flex';
+                else if (filter === 'TOOL_CALL') entry.style.display = entry.dataset.type === 'TOOL_CALL' ? 'flex' : 'none';
+                else entry.style.display = entry.dataset.agent === filter ? 'flex' : 'none';
+            });
+        }
+
+        function clearConsole() {
+            consoleFeed.innerHTML = '';
+        }
+    </script>
+</body>
+</html>
