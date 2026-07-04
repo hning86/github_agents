@@ -1,4 +1,4 @@
-google-adk[a2a]>=2.2.0
+google-adk[a2a,gcp,otel-gcp]>=2.2.0
 google-cloud-aiplatform>=1.155.0
 mcp>=1.27.2
 python-dotenv>=1.2.2
