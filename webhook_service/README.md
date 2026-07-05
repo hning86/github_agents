@@ -61,13 +61,13 @@ flowchart TD
 5. **Webhook Dispatch**: GitHub fires an HTTP POST webhook event (`pull_request` action: `opened`) to Cloud Run.
 6. **Agent Engine Invocation**: Cloud Run verifies HMAC signatures and asynchronously invokes the deployed `ADK GitHub PR Reviewer` on Vertex AI Agent Engine.
 7. **Retrieve PR Details**: The PR Reviewer agent queries the remote GitHub MCP server (`get_pull_request`, `get_pull_request_files`) over SSE to retrieve the file diffs and metadata.
-8. **LLM Code Review**: The PR Reviewer passes the diffs to Gemini 3.5 Flash to evaluate code quality, detect potential bugs, and generate both high-level summary review comments and exact line-by-line code suggestions.
+8. **LLM Code Review**: The PR Reviewer passes the diffs to Gemini 2.5 Pro to evaluate code quality, detect potential bugs, and generate both high-level summary review comments and exact line-by-line code suggestions.
 9. **Register Review Comments**: The PR Reviewer invokes GitHub MCP tools (`pull_request_review_write`, `add_comment_to_pending_review`) to post the review and inline comments directly onto the Pull Request in GitHub.
 10. **PR Merge**: The developer addresses the review feedback and merges the Pull Request into `main`.
 11. **Second Webhook Dispatch**: GitHub sends a second webhook event (`pull_request` action: `closed`, `merged: true`) to Cloud Run.
 12. **Docs Refresher Invocation**: Cloud Run detects the merge event and asynchronously invokes the deployed `ADK GitHub Docs Refresher` on Vertex AI Agent Engine.
 13. **Retrieve Current Docs & Diffs**: The Docs Refresher agent queries the remote GitHub MCP server to inspect the merged code changes and fetch existing markdown files from the target documentation repository (`gcp-scratch-docs`).
-14. **LLM Documentation Generation**: The Docs Refresher calls Gemini 3.5 Flash to synthesize required documentation updates, reference guides, or new architecture summaries reflecting the merged changes.
+14. **LLM Documentation Generation**: The Docs Refresher calls Gemini 2.5 Pro to synthesize required documentation updates, reference guides, or new architecture summaries reflecting the merged changes.
 15. **Open Docs PR**: The Docs Refresher invokes GitHub MCP server tools to create a new branch in `gcp-scratch-docs`, commit the updated markdown files, and submit a new documentation Pull Request for final human approval.
 
 ---

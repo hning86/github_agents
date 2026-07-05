@@ -16,7 +16,7 @@ PROJECT_ID="${GCP_PROJECT_ID}"
 REGION="${GCP_REGION}"
 AGENT_ENGINE_ID="${PR_REVIEWER_ENGINE_ID}"
 DISPLAY_NAME="ADK GitHub PR Reviewer"
-DESCRIPTION="Autonomous GitHub Pull Request code reviewer powered by Gemini 3.5 Flash and MCP"
+DESCRIPTION="Autonomous GitHub Pull Request code reviewer powered by Gemini 2.5 Pro and MCP"
 TARGET_ENV="pr_reviewer/.env"
 
 # Ensure cleanup of copied .env file upon exit
