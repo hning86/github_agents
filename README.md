@@ -77,7 +77,7 @@ To demonstrate or verify that the `pr_reviewer` agent actively retrieves and enf
 Because these standards are unique to `python_style_guide.md` and `pr_review_guidelines.md`, the AI's inline line comments will strictly cite these rules and use our mandated `[SEVERITY: ...]` header format.
 
 ### Trap 1: The Blocking Async + Bare Except (Best RAG Verification)
-Add this snippet to any file (e.g., `demo_webhook.py` or `storyflow.py`):
+Create a new test file called `demo_rag_traps.py` (or append to an existing file like `storyflow.py`) inside your source repository (`gcp-scratch`):
 ```python
 import time
 import requests
