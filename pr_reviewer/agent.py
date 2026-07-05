@@ -43,28 +43,50 @@ mcp_toolset = McpToolset(
     connection_params=connection_params,
 )
 
-# Configure ADK's built-in VertexAiRagRetrieval tool for RAG context
-rag_corpus_name = os.getenv("RAG_CORPUS_NAME", "").strip()
+def retrieve_pr_review_rag_context(query: str) -> str:
+    """
+    Retrieves relevant engineering standards, architectural documentation, and PR review guidelines from the Vertex AI RAG Engine corpus in us-east5.
+    Call this tool BEFORE reviewing code changes to ensure all inline comments strictly enforce repository-specific conventions (e.g. uv package management, type hints, non-blocking asyncio, logging, and security).
+    """
+    rag_corpus_name = os.getenv("RAG_CORPUS_NAME", "").strip()
+    if not rag_corpus_name:
+        return "No RAG_CORPUS_NAME set in environment. Proceeding with standard review."
 
-if rag_corpus_name:
     try:
         import vertexai
+        from vertexai.preview import rag
+
+        # Extract project and location from corpus resource name: projects/{project}/locations/{location}/ragCorpora/{id}
         parts = rag_corpus_name.split("/")
         if len(parts) >= 4:
-            vertexai.init(project=parts[1], location=parts[3])
-    except Exception as e:
-        logger.warning(f"Could not initialize vertexai location from RAG_CORPUS_NAME: {e}")
+            project_id = parts[1]
+            location = parts[3]
+            vertexai.init(project=project_id, location=location)
 
-    from google.adk.tools.retrieval import VertexAiRagRetrieval
-    rag_tool = VertexAiRagRetrieval(
-        name="retrieve_pr_review_rag_context",
-        description="Retrieves repository architecture, Python style guidelines, and PR review evaluation rules from the Vertex AI RAG Engine corpus.",
-        rag_corpora=[rag_corpus_name],
-        similarity_top_k=4,
-    )
-    agent_tools = [mcp_toolset, rag_tool]
-else:
-    agent_tools = [mcp_toolset]
+        response = rag.retrieval_query(
+            text=query,
+            rag_resources=[rag.RagResource(rag_corpus=rag_corpus_name)],
+            rag_retrieval_config=rag.RagRetrievalConfig(top_k=4),
+        )
+
+        contexts = []
+        if hasattr(response, "contexts") and hasattr(response.contexts, "contexts"):
+            for ctx in response.contexts.contexts:
+                contexts.append(ctx.text)
+        elif hasattr(response, "contexts"):
+            for ctx in response.contexts:
+                contexts.append(ctx.text)
+
+        if not contexts:
+            return "No relevant RAG contexts found for query."
+
+        return "\n\n---\n\n".join(contexts)
+    except Exception as e:
+        logger.error(f"Error retrieving RAG context: {e}", exc_info=True)
+        return f"Error retrieving RAG context: {e}"
+
+
+agent_tools = [mcp_toolset, retrieve_pr_review_rag_context]
 
 
 # Define the GitHub Helper Agent
