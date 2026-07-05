@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ADK Autonomous Agent Live Dashboard</title>
+    <title>GitHub Agents Live Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -83,6 +83,30 @@
             background: linear-gradient(to right, #fff, #94a3b8);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+        }
+
+        .gemini-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(236, 72, 153, 0.18));
+            border: 1px solid rgba(139, 92, 246, 0.45);
+            color: #f1f5f9;
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.25);
+            margin-left: 0.6rem;
+            text-transform: uppercase;
+        }
+
+        .gemini-sparkle {
+            background: linear-gradient(135deg, #00f0ff, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 0.9rem;
         }
 
         .connection-status {
@@ -332,7 +356,8 @@
     <header class="navbar">
         <div class="brand">
             <img src="/favicon.svg" alt="GitHub AI Agent" style="width:38px; height:38px; border-radius:10px;">
-            <span class="brand-title">ADK Multi-Agent Execution Dashboard</span>
+            <span class="brand-title">GitHub Agents Execution Dashboard</span>
+            <span class="gemini-badge"><span class="gemini-sparkle">✨</span> Powered by Gemini</span>
         </div>
         <div class="connection-status">
             <div class="status-dot" id="statusDot"></div>
