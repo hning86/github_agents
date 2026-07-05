@@ -5,6 +5,7 @@ Test script to discover and test ADK agents deployed to Google Cloud Vertex AI A
 import os
 import json
 import logging
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Suppress local method registration warnings
@@ -14,7 +15,7 @@ import vertexai
 from vertexai.preview import reasoning_engines
 from google.cloud.aiplatform_v1beta1.types import reasoning_engine_execution_service as aip_types
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "ninghai-ccai")
 REGION = os.getenv("GCP_REGION", "us-central1")

@@ -22,9 +22,13 @@ flowchart TD
         Dispatch -->|"3b. PR Merged (stream_query)"| Docs_Agent["ADK GitHub Docs Refresher"]
     end
 
+    subgraph RAG ["GCP Vertex AI RAG Engine"]
+        PR_Agent <-->|"4a. VertexAiRagRetrieval (Context & Style Rules)"| RAG_Corpus["RagCorpus (mock_docs/docs)"]
+    end
+
     subgraph MCP ["Model Context Protocol over SSE"]
-        PR_Agent <-->|"4. Remote Tool Calls"| MCP_Server["Remote GitHub MCP Server"]
-        Docs_Agent <-->|"4. Remote Tool Calls"| MCP_Server
+        PR_Agent <-->|"4b. Remote Tool Calls"| MCP_Server["Remote GitHub MCP Server"]
+        Docs_Agent <-->|"4b. Remote Tool Calls"| MCP_Server
     end
 
     MCP_Server -->|"5a. Post Inline Reviews & Comments"| Source_Repo["Source Code Repository"]
@@ -35,8 +39,8 @@ flowchart TD
 1. **Instantaneous Event Ingestion**: When a developer opens, updates, or merges a Pull Request on GitHub, GitHub posts an event payload (`pull_request`) to the webhook service hosted on **GCP Cloud Run**.
 2. **Security & Validation**: The Cloud Run service verifies the request integrity using HMAC SHA-256 signatures (`GITHUB_WEBHOOK_SECRET`) and checks if the source repository is authorized (`ALLOWED_CODE_REPOS`).
 3. **Asynchronous Dispatch**: To comply with GitHub's strict 10-second webhook timeout, Cloud Run immediately returns `202 Accepted` to GitHub and queues a non-blocking asyncio background task (`asyncio.to_thread`) to stream the prompt to the remote reasoning engine.
-4. **Autonomous Reasoning on Agent Engine**:
-   - **On PR Open / Push (`opened` / `synchronize`)**: Queries the deployed `ADK GitHub PR Reviewer` instance on Vertex AI Agent Engine. The agent connects to the remote GitHub MCP server (`api.githubcopilot.com/mcp/sse`), analyzes line diffs, and submits line-by-line inline review comments directly onto the Pull Request.
+4. **Autonomous Reasoning on Agent Engine with RAG Grounding**:
+   - **On PR Open / Push (`opened` / `synchronize`)**: Queries the deployed `ADK GitHub PR Reviewer` instance on Vertex AI Agent Engine. The agent first calls ADK's built-in `VertexAiRagRetrieval` tool (`retrieve_pr_review_rag_context`) to fetch exact repository coding standards and architecture rules (`mock_docs/docs/*.md`) from Vertex AI RAG Engine (`RAG_CORPUS_NAME`). It then connects to the remote GitHub MCP server (`api.githubcopilot.com/mcp/sse`), evaluates line diffs strictly against RAG guidelines, and submits formatted inline review comments directly onto the Pull Request.
    - **On PR Merge (`closed` + `merged`)**: Queries the deployed `ADK GitHub Docs Refresher` instance on Vertex AI Agent Engine. The agent inspects the merged diffs, explores existing `.md` files in the target repository (`DOCS_TARGET_REPO`), creates a new branch, commits necessary documentation updates, and opens a documentation pull request.
 
 ---
@@ -63,6 +67,64 @@ Below is the complete 15-step lifecycle of an autonomous code review and documen
 13. **Retrieve Current Docs & Diffs**: The Docs Refresher agent queries the remote GitHub MCP server to inspect the merged code changes and fetch existing markdown files from the target documentation repository (`gcp-scratch-docs`).
 14. **LLM Documentation Generation**: The Docs Refresher calls Gemini 3.5 Flash to synthesize required documentation updates, reference guides, or new architecture summaries reflecting the merged changes.
 15. **Open Docs PR**: The Docs Refresher invokes GitHub MCP server tools to create a new branch in `gcp-scratch-docs`, commit the updated markdown files, and submit a new documentation Pull Request for final human approval.
+
+---
+
+## 🪤 RAG Grounding Demo & "RAG Traps" Reference
+
+To demonstrate or verify that the `pr_reviewer` agent actively retrieves and enforces your Vertex AI RAG Engine corpus (`mock_docs/docs/*.md`), make a commit in your source repository (`gcp-scratch`) containing one of the following deliberate code violations (**RAG Traps**).
+
+Because these standards are unique to `python_style_guide.md` and `pr_review_guidelines.md`, the AI's inline line comments will strictly cite these rules and use our mandated `[SEVERITY: ...]` header format.
+
+### Trap 1: The Blocking Async + Bare Except (Best RAG Verification)
+Add this snippet to any file (e.g., `demo_webhook.py` or `storyflow.py`):
+```python
+import time
+import requests
+
+async def handle_incoming_webhook(payload: dict):
+    # RAG Violation 1: Synchronous sleep inside async function
+    time.sleep(5)
+    
+    try:
+        # RAG Violation 2: Synchronous requests.get inside async function without asyncio.to_thread
+        resp = requests.get("https://api.github.com/zen")
+        return resp.text
+    except Exception:
+        # RAG Violation 3: Bare except without exc_info=True or logging
+        pass
+```
+* **Expected RAG Inline Comment**:
+  > **[SEVERITY: CRITICAL]** - *Blocking Asynchronous Call*  
+  > **Issue:** Using synchronous `time.sleep()` and `requests.get()` inside an `async def` function blocks the FastAPI/asyncio event loop for all concurrent requests.  
+  > **Recommendation:** As mandated by section 3.1 of our `python_style_guide.md`, never perform synchronous blocking calls in `async def`. Wrap them in `await asyncio.to_thread(requests.get, ...)` and replace `time.sleep` with `await asyncio.sleep()`.
+
+### Trap 2: Insecure Signature Verification (Timing Attack)
+Add a cryptographic verification helper using `==`:
+```python
+def verify_github_webhook(secret: str, received_signature: str, payload: bytes) -> bool:
+    # RAG Violation: Using standard '==' comparison instead of constant-time comparison
+    expected = "sha256=" + secret
+    if expected == received_signature:
+        return True
+    return False
+```
+* **Expected RAG Inline Comment**:
+  > **[SEVERITY: CRITICAL]** - *Security Vulnerability (Timing Attack)*  
+  > **Issue:** Using `==` to compare cryptographic signatures exposes the service to timing attacks.  
+  > **Recommendation:** According to our security standards (`python_style_guide.md`), always use `hmac.compare_digest(expected, received_signature)`.
+
+### Trap 3: The `pip` / `virtualenv` Package Management Violation
+Add a comment or script instructions:
+```python
+# To install dependencies for this script, run:
+# virtualenv venv && source venv/bin/activate
+# pip install requests pydantic
+```
+* **Expected RAG Inline Comment**:
+  > **[SEVERITY: MODERATE]** - *Package Management Violation*  
+  > **Issue:** Using `pip` and `virtualenv` directly.  
+  > **Recommendation:** Section 1 of `python_style_guide.md` explicitly forbids `pip`/`virtualenv` and mandates **`uv`** (`uv sync` / `uv lock`) as our exclusive package manager.
 
 ---
 
@@ -96,7 +158,17 @@ Below is the complete 15-step lifecycle of an autonomous code review and documen
 
    # Docs Refresher Target Repository
    DOCS_TARGET_REPO=owner/repo-docs
+
+   # Vertex AI RAG Engine Corpus
+   RAG_CORPUS_NAME=projects/your-gcp-project/locations/us-east5/ragCorpora/...
    ```
+
+3. **Ingest RAG Documentation (`mock_docs/docs/`)**:
+   Populate or refresh your Vertex AI RAG Engine corpus (`us-east5`) with the provided high-signal engineering and style documentation:
+   ```bash
+   uv run mock_docs/ingest_to_rag_engine.py
+   ```
+   Copy the output `RAG_CORPUS_NAME` into your `.env` file so the PR Reviewer agent can retrieve guidelines natively using ADK's `VertexAiRagRetrieval` tool (`retrieve_pr_review_rag_context`).
 
 ---
 

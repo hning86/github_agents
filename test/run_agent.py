@@ -2,7 +2,11 @@ import asyncio
 import os
 import sys
 import logging
+from pathlib import Path
 from dotenv import load_dotenv
+
+# Ensure parent directory (project root) is on sys.path so local modules (e.g. pr_reviewer) can be imported
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Load environment variables
 load_dotenv()

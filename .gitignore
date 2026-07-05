@@ -44,4 +44,7 @@ sqlite.db
 .adk/
 .agent_engine_config.json
 
+# Temporary agent deployment staging folders
+*_tmp*/
+
 

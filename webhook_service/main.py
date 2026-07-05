@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Request, HTTPException, Header, BackgroundTasks
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
 
 from .broadcaster import broadcast_event, sse_event_generator, clear_history
 from .engine_client import get_remote_engine, query_remote_agent
@@ -30,6 +30,7 @@ app = FastAPI(
 
 UI_DIR = Path(__file__).parent / "ui"
 DASHBOARD_HTML_PATH = UI_DIR / "dashboard.html"
+FAVICON_PATH = UI_DIR / "favicon.svg"
 
 def verify_signature(payload: bytes, signature: Optional[str], secret: str) -> bool:
     """Verify HMAC SHA-256 webhook signature from GitHub."""
@@ -121,6 +122,12 @@ async def web_ui():
     """Serve the standalone live streaming dashboard HTML."""
     html_content = DASHBOARD_HTML_PATH.read_text(encoding="utf-8")
     return HTMLResponse(content=html_content)
+
+@app.get("/favicon.svg", include_in_schema=False)
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Serve the application favicon for browser tabs and bookmarks."""
+    return FileResponse(FAVICON_PATH, media_type="image/svg+xml")
 
 @app.post("/webhook/github")
 async def github_webhook(
