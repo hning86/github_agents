@@ -48,6 +48,11 @@ def retrieve_pr_review_rag_context(query: str) -> str:
     Retrieves relevant engineering standards, architectural documentation, and PR review guidelines from the Vertex AI RAG Engine corpus in us-east5.
     Call this tool BEFORE reviewing code changes to ensure all inline comments strictly enforce repository-specific conventions (e.g. uv package management, type hints, non-blocking asyncio, logging, and security).
     """
+    # WHY WE USE A CUSTOM PYTHON FUNCTION TOOL INSTEAD OF ADK's VertexAiRagRetrieval:
+    # ADK's built-in `VertexAiRagRetrieval` tool automatically converts into Gemini's native `types.Retrieval(vertex_rag_store=...)` parameter at request time for Gemini 2.x models.
+    # However, Gemini's built-in regional `vertex_rag_store` API requires the `RagCorpus` to exist inside the EXACT SAME GCP region (`us-central1`) as the model prediction endpoint.
+    # Because our Reasoning Engine runs in `us-central1` but our RagCorpus resides in `us-east5`, passing a cross-region `vertex_rag_store` triggers a `400 INVALID_ARGUMENT` API error from Gemini.
+    # By implementing this custom Python function (`rag.retrieval_query`), the Python SDK inside our container handles the cross-region REST/gRPC lookup cleanly and returns pure string context without regional API rejection.
     rag_corpus_name = os.getenv("RAG_CORPUS_NAME", "").strip()
     if not rag_corpus_name:
         return "No RAG_CORPUS_NAME set in environment. Proceeding with standard review."
