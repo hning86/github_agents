@@ -1,4 +1,7 @@
 import os
+os.environ["GOOGLE_API_USE_MTLS_ENDPOINT"] = "never"
+os.environ["GOOGLE_API_USE_CLIENT_CERTIFICATE"] = "false"
+
 import logging
 from functools import cached_property
 from typing import AsyncGenerator
