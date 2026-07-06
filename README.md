@@ -1,6 +1,6 @@
 # ADK Automated GitHub PR Reviewer & Docs Refresher
 
-An intelligent, multi-agent AI system built on the **Google Agent Development Kit (ADK)** and **Gemini 2.5 Pro via Vertex AI**. This service integrates directly with remote GitHub MCP servers over Streamable HTTP to autonomously review Pull Requests and keep repository documentation synchronized.
+An intelligent, multi-agent AI system built on the **Google Agent Development Kit (ADK)** and **Gemini 3.5 Flash via Vertex AI (`global`)**. This service integrates directly with remote GitHub MCP servers over Streamable HTTP to autonomously review Pull Requests and keep repository documentation synchronized.
 
 ---
 
@@ -42,6 +42,7 @@ flowchart TD
 4. **Autonomous Reasoning on Agent Engine with RAG Grounding**:
    - **On PR Open / Push (`opened` / `synchronize`)**: Queries the deployed `ADK GitHub PR Reviewer` instance on Vertex AI Agent Engine. The agent first calls ADK's built-in `VertexAiRagRetrieval` tool (`retrieve_pr_review_rag_context`) to fetch exact repository coding standards and architecture rules (`mock_docs/docs/*.md`) from Vertex AI RAG Engine (`RAG_CORPUS_NAME`). It then connects to the remote GitHub MCP server (`api.githubcopilot.com/mcp/sse`), evaluates line diffs strictly against RAG guidelines, and submits formatted inline review comments directly onto the Pull Request.
    - **On PR Merge (`closed` + `merged`)**: Queries the deployed `ADK GitHub Docs Refresher` instance on Vertex AI Agent Engine. The agent inspects the merged diffs, explores existing `.md` files in the target repository (`DOCS_TARGET_REPO`), creates a new branch, commits necessary documentation updates, and opens a documentation pull request.
+5. **Regional & Retry-Capable Model Architecture (`RegionalGemini`)**: Both agents subclass `google.adk.models.Gemini` (`RegionalGemini`) and override `@cached_property def api_client(self)` to explicitly forward `location="global"` (`GCP_GEMINI_REGION`) and `types.HttpRetryOptions` to the underlying `google.genai.Client`. This ensures zero-overhead client caching across multi-turn agent runs while routing calls for latest models (`gemini-3.5-flash`) cleanly to global endpoints without cross-region lookup errors.
 
 ---
 
@@ -57,7 +58,7 @@ Below is the complete 15-step lifecycle of an autonomous code review and documen
 5. **Webhook Dispatch**: GitHub fires an HTTP POST webhook event (`pull_request` action: `opened`) to the Cloud Run endpoint.
 6. **Agent Engine Invocation**: Cloud Run verifies HMAC signatures and asynchronously invokes the deployed `ADK GitHub PR Reviewer` on Vertex AI Agent Engine.
 7. **Retrieve PR Details**: The PR Reviewer agent queries the remote GitHub MCP server (`get_pull_request`, `get_pull_request_files`) over SSE to retrieve the file diffs and metadata.
-8. **LLM Code Review**: The PR Reviewer passes the diffs to Gemini 2.5 Pro to evaluate code quality, detect potential bugs, and generate both high-level summary review comments and exact line-by-line code suggestions.
+8. **LLM Code Review**: The PR Reviewer passes the diffs to Gemini 3.5 Flash to evaluate code quality, detect potential bugs, and generate both high-level summary review comments and exact line-by-line code suggestions.
 9. **Register Review Comments**: The PR Reviewer invokes GitHub MCP tools (`pull_request_review_write`, `add_comment_to_pending_review`) to post the review and inline comments directly onto the Pull Request in GitHub.
 
 ### Phase 2: Autonomous Documentation Synchronization
@@ -65,7 +66,7 @@ Below is the complete 15-step lifecycle of an autonomous code review and documen
 11. **Second Webhook Dispatch**: GitHub sends a second webhook event (`pull_request` action: `closed`, `merged: true`) to Cloud Run.
 12. **Docs Refresher Invocation**: Cloud Run detects the merge event and asynchronously invokes the deployed `ADK GitHub Docs Refresher` on Vertex AI Agent Engine.
 13. **Retrieve Current Docs & Diffs**: The Docs Refresher agent queries the remote GitHub MCP server to inspect the merged code changes and fetch existing markdown files from the target documentation repository (`gcp-scratch-docs`).
-14. **LLM Documentation Generation**: The Docs Refresher calls Gemini 2.5 Pro to synthesize required documentation updates, reference guides, or new architecture summaries reflecting the merged changes.
+14. **LLM Documentation Generation**: The Docs Refresher calls Gemini 3.5 Flash to synthesize required documentation updates, reference guides, or new architecture summaries reflecting the merged changes.
 15. **Open Docs PR**: The Docs Refresher invokes GitHub MCP server tools to create a new branch in `gcp-scratch-docs`, commit the updated markdown files, and submit a new documentation Pull Request for final human approval.
 
 ---
@@ -146,6 +147,7 @@ Add a comment or script instructions:
    # Vertex AI Configuration
    GCP_PROJECT_ID=your-gcp-project-id
    GCP_REGION=us-central1
+   GCP_GEMINI_REGION=global
    GOOGLE_GENAI_USE_VERTEXAI=1
 
    # Remote GitHub MCP Authentication
@@ -201,6 +203,20 @@ uv run python -m webhook_service.main
   ssh -R 80:localhost:8080 nokey@localhost.run
   ```
   Copy the forwarding URL (`https://xxxx.localhost.run`) and paste it into your GitHub repository settings under **Settings** → **Webhooks** → **Add webhook** (Payload URL: `https://xxxx.localhost.run/webhook/github`).
+
+### 4. Automated Webhook Test Scripts (GCP & Local)
+Simulate realistic GitHub `pull_request` webhook events from the terminal to test your deployed Cloud Run webhook service or local FastAPI server:
+```bash
+# Simulate a new PR opened event (triggers PR Reviewer)
+uv run python test/test_webhook_pr_created.py --pr 1 --title "Test PR from automated webhook test script"
+
+# Simulate a PR merged event (triggers Docs Refresher)
+uv run python test/test_webhook_pr_closed.py --pr 1 --title "Test PR closed/merged from automated webhook test script"
+
+# Simulate a PR closed without merging (verified as ignored by the webhook service)
+uv run python test/test_webhook_pr_closed.py --pr 2 --unmerged --title "Test closed without merge PR"
+```
+*Note: Both test scripts automatically read `GITHUB_WEBHOOK_SECRET` from `.env` and generate valid HMAC SHA-256 signatures (`X-Hub-Signature-256`) so the webhook service accepts the delivery.*
 
 ---
 

@@ -4,7 +4,7 @@ os.environ["GOOGLE_API_USE_CLIENT_CERTIFICATE"] = "false"
 
 import logging
 from functools import cached_property
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
 from dotenv import load_dotenv
 
 from google.adk.models import Gemini
@@ -12,7 +12,7 @@ from google.adk.models.llm_response import LlmResponse
 from google.adk.agents.llm_agent import Agent
 from google.adk.tools import McpToolset
 from google.adk.tools.mcp_tool import StreamableHTTPConnectionParams
-from google.genai import Client
+from google.genai import Client, types
 
 # Load environment variables from .env
 load_dotenv()
@@ -42,7 +42,7 @@ connection_params = StreamableHTTPConnectionParams(
 )
 
 # Instantiate the McpToolset pointing to the remote SSE GitHub MCP server
-mcp_toolset = McpToolset(
+github_mcp_toolset = McpToolset(
     connection_params=connection_params,
 )
 
@@ -94,12 +94,46 @@ def retrieve_pr_review_rag_context(query: str) -> str:
         return f"Error retrieving RAG context: {e}"
 
 
-agent_tools = [mcp_toolset, retrieve_pr_review_rag_context]
+agent_tools = [github_mcp_toolset, retrieve_pr_review_rag_context]
+
+
+class RegionalGemini(Gemini):
+    """Subclass of Gemini to pass custom location and project to google.genai.Client."""
+    location: Optional[str] = None
+    project: Optional[str] = None
+
+    @cached_property
+    def api_client(self) -> Client:
+        base_url, api_version = self._base_url_and_api_version
+        kwargs_for_http_options: dict[str, Any] = {
+            "headers": self._tracking_headers(),
+            "retry_options": self.retry_options,
+            "base_url": base_url,
+        }
+        if api_version:
+            kwargs_for_http_options["api_version"] = api_version
+
+        kwargs: dict[str, Any] = {
+            "http_options": types.HttpOptions(**kwargs_for_http_options),
+        }
+        if self.model.startswith("projects/") or self.location or self.project or os.getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1":
+            kwargs["vertexai"] = True
+        if self.location:
+            kwargs["location"] = self.location
+        if self.project:
+            kwargs["project"] = self.project
+
+        return Client(**kwargs)
 
 
 # Define the GitHub Helper Agent
 pr_reviewer = Agent(
-    model="gemini-2.5-pro",
+    model=RegionalGemini(
+        model="gemini-3.5-flash",
+        location=os.getenv("GCP_GEMINI_REGION", "global"),
+        project=os.getenv("GCP_PROJECT_ID"),
+        retry_options=types.HttpRetryOptions(attempts=5, initial_delay=1.0, max_delay=60.0),
+    ),
     name="pr_reviewer",
     description="Agent with access to the remote GitHub-hosted MCP tools and Vertex AI RAG Engine to conduct standards-enforced Pull Request reviews.",
     instruction="""You are an expert GitHub assistant and automated PR Reviewer agent on Google Cloud Vertex AI Agent Engine.
